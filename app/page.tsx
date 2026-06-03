@@ -184,14 +184,18 @@ export default function Home() {
                 ["企業理念", form.philosophy],
                 ["求める人物像", form.persona],
                 ["文字数条件", form.wordLimit]
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 border-b border-blue-100 pb-3 text-sm last:border-b-0 last:pb-0">
-                  <span className="text-slate-600">{label}</span>
-                  <span className={`font-semibold ${value.trim() ? "text-skyline" : "text-slate-400"}`}>
-                    {value.trim() ? "入力済み" : "未入力"}
-                  </span>
-                </div>
-              ))}
+              ].map(([label, value]) => {
+                const displayValue = value ?? "";
+
+                return (
+                  <div key={label} className="flex items-center justify-between gap-4 border-b border-blue-100 pb-3 text-sm last:border-b-0 last:pb-0">
+                    <span className="text-slate-600">{label}</span>
+                    <span className={`font-semibold ${displayValue.trim() ? "text-skyline" : "text-slate-400"}`}>
+                      {displayValue.trim() ? "入力済み" : "未入力"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </aside>
         </section>
