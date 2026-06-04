@@ -129,6 +129,11 @@ const FORBIDDEN_UNLESS_EXPLICIT: Record<string, RegExp> = {
   理由: /理由|志望|なぜ|興味|関心/
 };
 
+const REASON_EXPRESSION_PATTERN =
+  /魅力を感じ|面白いと思|興味を持|印象的だ(?:った)?|良いと思|感動し|共感し|心に残|惹かれ|好きだった|理由|なぜなら|からです|ためです|だから|なので/;
+const WORK_REASON_NOUN_PATTERN = /テンポ感|世界観|背景描写|演出|構成|キャラクター|読後感|ストーリー|音楽|映像|描写|設定|脚本|表現|メッセージ性/;
+const OPINION_EXPRESSION_PATTERN = /魅力を感じ|面白いと思|印象的だ(?:った)?|共感し|感動し|心に残|惹かれ|好きだった|好きです|良いと思|感じ|思い|考え/;
+
 export function countJapaneseCharacters(text: string) {
   return Array.from(text.replace(/\s/g, "")).length;
 }
@@ -213,6 +218,16 @@ function findEvidence(text: string, label: string) {
   const keywords = keywordsFor(label);
   const rule = [...QUESTION_RULES, ...PHILOSOPHY_RULES].find((item) => item.label === label);
 
+  if (label === "理由") {
+    const reasonSentence = sentences(text).find((sentence) => REASON_EXPRESSION_PATTERN.test(sentence) || WORK_REASON_NOUN_PATTERN.test(sentence));
+    if (reasonSentence) return compactEvidence(reasonSentence);
+  }
+
+  if (label === "感想・価値観") {
+    const opinionSentence = sentences(text).find((sentence) => OPINION_EXPRESSION_PATTERN.test(sentence));
+    if (opinionSentence) return compactEvidence(opinionSentence);
+  }
+
   for (const pattern of rule?.evidencePatterns ?? []) {
     const match = text.match(pattern)?.[0];
     if (match) return compactEvidence(match);
@@ -252,6 +267,39 @@ function scoreCriterion(text: string, label: string) {
   const score = label === "成果" && !hasExplicitResult ? Math.min(rawScore, 38) : rawScore;
 
   return { score, evidence };
+}
+
+function adjustReasonExplanationCriterion(
+  text: string,
+  element: string,
+  result: ReturnType<typeof scoreCriterion>
+) {
+  if (element !== "理由" && element !== "感想・価値観") return result;
+
+  const reasonSignal = REASON_EXPRESSION_PATTERN.test(text);
+  const nounSignal = WORK_REASON_NOUN_PATTERN.test(text);
+  const opinionSignal = OPINION_EXPRESSION_PATTERN.test(text);
+  const evidence = result.evidence || findEvidence(text, element);
+
+  if (element === "理由") {
+    if (reasonSignal && nounSignal) {
+      return { score: Math.max(result.score, 82), evidence };
+    }
+    if (reasonSignal || nounSignal) {
+      return { score: Math.max(result.score, 58), evidence };
+    }
+  }
+
+  if (element === "感想・価値観") {
+    if (opinionSignal && nounSignal) {
+      return { score: Math.max(result.score, 82), evidence };
+    }
+    if (opinionSignal) {
+      return { score: Math.max(result.score, 58), evidence };
+    }
+  }
+
+  return result;
 }
 
 function includesIdea(text: string, label: string) {
@@ -389,11 +437,20 @@ export function fallbackAnalyze(input: AnalyzeRequest): AnalyzeResult {
   const requiredCriteria = questionCriteria.length ? questionCriteria : DEFAULT_CRITERIA;
 
   const coverage = requiredCriteria.map((element) => {
-    const { score, evidence } = scoreCriterion(input.essay, element);
+    const criterionResult = scoreCriterion(input.essay, element);
+    const adjustedResult =
+      questionType === "理由説明系"
+        ? adjustReasonExplanationCriterion(input.essay, element, criterionResult)
+        : criterionResult;
+    const { score, evidence } = adjustedResult;
     const status = statusFromScore(score);
+    const reasonMissingText =
+      questionType === "理由説明系" && element === "理由"
+        ? "好き・面白いという結論は読み取れますが、なぜそう感じたのかを示す理由表現が十分に見つかりません。"
+        : `${relatedContext(input.essay)}${element}として求められる内容が明示されていません。`;
     const reason = status !== "回答漏れ"
       ? `${evidence ? "本文中の該当表現から" : "本文全体の文脈から"}、${element}に触れていると判断しました。`
-      : `${relatedContext(input.essay)}${element}として求められる内容が明示されていません。`;
+      : reasonMissingText;
 
     return {
       element,
