@@ -29,8 +29,10 @@ export type QuestionType =
   | "志望動機系"
   | "改善提案系"
   | "理由説明系"
+  | "学び系"
+  | "価値観系"
   | "将来像系"
-  | "一般設問";
+  | "一般質問";
 
 export type AnalyzeResult = {
   questionType: QuestionType;

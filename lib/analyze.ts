@@ -16,8 +16,8 @@ type QuestionTypeConfig = {
 const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
   {
     type: "ガクチカ系",
-    patterns: [/学生時代.*力|ガクチカ|主体的|頑張った|取り組んだ経験|力を入れた|最も.*経験/],
-    criteria: ["経験", "具体的内容", "工夫", "成果", "学び"]
+    patterns: [/学生時代.*力|ガクチカ|主体的|頑張った|取り組んだ経験|力を入れた|最も.*経験|困難.*経験|リーダーシップ|結果を出した経験|経験.*学んだ/],
+    criteria: ["経験", "課題", "行動", "工夫", "成果", "学び"]
   },
   {
     type: "自己PR系",
@@ -38,6 +38,16 @@ const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
     type: "理由説明系",
     patterns: [/好き.*理由|面白い.*理由|興味.*理由|印象に残った.*理由|作品.*理由|コンテンツ.*理由|技術.*理由/],
     criteria: ["対象", "理由", "具体例", "感想・価値観"]
+  },
+  {
+    type: "学び系",
+    patterns: [/学んだこと|得たこと|成長したこと|経験から.*学|気づいたこと/],
+    criteria: ["経験", "学び", "具体例", "今後の活用"]
+  },
+  {
+    type: "価値観系",
+    patterns: [/価値観|大切にしていること|あなたらしさ|判断基準|信念/],
+    criteria: ["価値観", "理由", "具体例", "行動"]
   },
   {
     type: "将来像系",
@@ -106,9 +116,14 @@ const DEFAULT_KEYWORDS: Record<string, string[]> = {
   設問への直接回答: ["結論", "経験", "理由", "考え", "取り組"],
   具体性: ["具体", "例えば", "場面", "状況", "内容"],
   行動と結果: ["行動", "実施", "取り組", "結果", "成果"],
+  経験: ["経験", "活動", "運営", "担当", "参加", "所属", "サークル", "新歓", "アルバイト", "研究", "インターン", "プロジェクト", "学園祭", "ボランティア", "において", "活動で", "運営で", "担当として", "の際"],
+  課題: ["課題", "問題", "困難", "悩み", "壁", "対立", "方針のズレ", "参加率低下", "人手不足", "心理的ハードル", "低下", "不足"],
+  行動: ["行動", "実行", "取り組", "提案", "提案した", "実施", "実施した", "主導", "主導した", "企画", "企画した", "変更", "変更した", "改善", "改善した", "呼びかけ", "設けた", "増やした"],
+  工夫: ["工夫", "意識", "調整", "見直", "変更", "個別対応", "交流機会", "フィードバック", "改善", "方法", "設けた", "増やした"],
+  成果: ["成果", "結果", "達成", "向上", "増加", "増え", "改善", "成功", "評価", "売上", "参加者", "伸びた"],
+  学び: ["学ん", "学び", "気づ", "実感", "重要性", "必要性", "理解", "得た", "大切"],
   強み: ["強み", "長所", "得意", "持ち味", "私らしさ"],
   具体エピソード: ["経験", "エピソード", "具体", "場面", "活動", "取り組"],
-  行動: ["行動", "実行", "取り組", "提案", "働きかけ", "改善"],
   再現性: ["活か", "再現", "貢献", "今後", "発揮", "御社", "当社"],
   興味関心: ["興味", "関心", "惹か", "魅力", "面白"],
   企業理解: ["理念", "事業", "サービス", "強み", "特徴", "業界", "御社", "当社"],
@@ -121,7 +136,9 @@ const DEFAULT_KEYWORDS: Record<string, string[]> = {
   具体例: ["具体", "場面", "シーン", "例えば", "描写", "演出", "機能", "内容"],
   "感想・価値観": ["感じ", "思い", "考え", "価値観", "面白", "魅力", "印象", "好き"],
   目標: ["目標", "将来", "やりたい", "実現", "なりたい", "5年後", "５年後"],
-  実現方法: ["方法", "行動", "努力", "学び", "経験", "身につけ", "取り組"]
+  実現方法: ["方法", "行動", "努力", "学び", "経験", "身につけ", "取り組"],
+  今後の活用: ["活か", "今後", "次", "将来", "応用", "貢献"],
+  価値観: ["価値観", "大切", "重視", "信念", "判断基準", "こだわり"]
 };
 
 const FORBIDDEN_UNLESS_EXPLICIT: Record<string, RegExp> = {
@@ -133,6 +150,15 @@ const REASON_EXPRESSION_PATTERN =
   /魅力を感じ|面白いと思|興味を持|印象的だ(?:った)?|良いと思|感動し|共感し|心に残|惹かれ|好きだった|理由|なぜなら|からです|ためです|だから|なので/;
 const WORK_REASON_NOUN_PATTERN = /テンポ感|世界観|背景描写|演出|構成|キャラクター|読後感|ストーリー|音楽|映像|描写|設定|脚本|表現|メッセージ性/;
 const OPINION_EXPRESSION_PATTERN = /魅力を感じ|面白いと思|印象的だ(?:った)?|共感し|感動し|心に残|惹かれ|好きだった|好きです|良いと思|感じ|思い|考え/;
+
+const GAKUCHIKA_SIGNAL_PATTERNS: Record<string, RegExp> = {
+  経験: /サークル|新歓|アルバイト|研究|インターン|プロジェクト|学園祭|ボランティア|ゼミ|部活|運営|活動|担当|参加|所属|において|活動で|運営で|担当として|の際/,
+  課題: /課題|問題|困難|悩み|壁|対立|方針のズレ|参加率低下|人手不足|心理的ハードル|低下|不足|うまくいかな|難し/,
+  行動: /提案した|提案|実施した|実施|主導した|主導|企画した|企画|変更した|変更|改善した|改善|呼びかけた|呼びかけ|設けた|増やした|創出した|行った/,
+  工夫: /工夫した|工夫|意識した|意識|調整した|調整|見直した|見直|変更した|変更|個別対応|交流機会|フィードバック方法|方法を変|設けた|増やした|創出した/,
+  成果: /増加した|増えた|改善した|達成した|成功した|参加者が増|売上が伸び|評価された|向上した|伸びた|結果として/,
+  学び: /学んだ|学び|気づいた|気づき|実感した|重要性を知|必要性を理解|理解した|大切だと感じ/
+};
 
 export function countJapaneseCharacters(text: string) {
   return Array.from(text.replace(/\s/g, "")).length;
@@ -148,7 +174,7 @@ function unique(items: string[]) {
 
 function classifyQuestion(question: string): QuestionType {
   const normalized = question.replace(/\s/g, "");
-  return QUESTION_TYPE_CONFIGS.find((config) => config.patterns.some((pattern) => pattern.test(normalized)))?.type ?? "一般設問";
+  return QUESTION_TYPE_CONFIGS.find((config) => config.patterns.some((pattern) => pattern.test(normalized)))?.type ?? "一般質問";
 }
 
 function criteriaForQuestionType(type: QuestionType, question: string) {
@@ -217,6 +243,12 @@ function compactEvidence(text: string) {
 function findEvidence(text: string, label: string) {
   const keywords = keywordsFor(label);
   const rule = [...QUESTION_RULES, ...PHILOSOPHY_RULES].find((item) => item.label === label);
+
+  const gakuchikaPattern = GAKUCHIKA_SIGNAL_PATTERNS[label];
+  if (gakuchikaPattern) {
+    const signalSentence = sentences(text).find((sentence) => gakuchikaPattern.test(sentence));
+    if (signalSentence) return compactEvidence(signalSentence);
+  }
 
   if (label === "理由") {
     const reasonSentence = sentences(text).find((sentence) => REASON_EXPRESSION_PATTERN.test(sentence) || WORK_REASON_NOUN_PATTERN.test(sentence));
@@ -300,6 +332,35 @@ function adjustReasonExplanationCriterion(
   }
 
   return result;
+}
+
+function adjustGakuchikaCriterion(
+  text: string,
+  element: string,
+  result: ReturnType<typeof scoreCriterion>
+) {
+  const pattern = GAKUCHIKA_SIGNAL_PATTERNS[element];
+  if (!pattern) return result;
+
+  const evidence = result.evidence || findEvidence(text, element);
+  const hasSignal = pattern.test(text);
+
+  if (!hasSignal) return result;
+
+  const strongSignals: Record<string, RegExp> = {
+    経験: /サークル|新歓|アルバイト|研究|インターン|プロジェクト|学園祭|ボランティア|ゼミ|部活|運営|活動/,
+    課題: /困難|課題|問題|対立|参加率低下|人手不足|心理的ハードル|方針のズレ/,
+    行動: /提案し|提案した|実施し|実施した|主導し|主導した|企画し|企画した|変更し|変更した|改善し|改善した|呼びかけ|創出し|設け/,
+    工夫: /工夫した|意識した|調整した|見直した|個別対応|交流機会|フィードバック方法|方法を変/,
+    成果: /増加した|増えた|達成した|成功した|参加者が増|売上が伸び|評価された|向上した/,
+    学び: /学んだ|学びました|気づいた|実感した|重要性を知|重要性を学|必要性を理解|理解した/
+  };
+
+  const strong = strongSignals[element]?.test(text);
+  return {
+    score: Math.max(result.score, strong ? 82 : 58),
+    evidence
+  };
 }
 
 function includesIdea(text: string, label: string) {
@@ -441,6 +502,8 @@ export function fallbackAnalyze(input: AnalyzeRequest): AnalyzeResult {
     const adjustedResult =
       questionType === "理由説明系"
         ? adjustReasonExplanationCriterion(input.essay, element, criterionResult)
+        : questionType === "ガクチカ系"
+          ? adjustGakuchikaCriterion(input.essay, element, criterionResult)
         : criterionResult;
     const { score, evidence } = adjustedResult;
     const status = statusFromScore(score);
