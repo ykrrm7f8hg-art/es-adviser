@@ -23,7 +23,17 @@ export type WordCountEvaluation = {
   status: string;
 };
 
+export type QuestionType =
+  | "ガクチカ系"
+  | "自己PR系"
+  | "志望動機系"
+  | "改善提案系"
+  | "理由説明系"
+  | "将来像系"
+  | "一般設問";
+
 export type AnalyzeResult = {
+  questionType: QuestionType;
   overallScore: number;
   questionFitScore: number;
   philosophyFitScore?: number;

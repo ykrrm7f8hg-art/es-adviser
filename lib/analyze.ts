@@ -1,4 +1,4 @@
-import type { AnalyzeRequest, AnalyzeResult, CoverageItem, WordCountEvaluation } from "./types";
+import type { AnalyzeRequest, AnalyzeResult, CoverageItem, QuestionType, WordCountEvaluation } from "./types";
 
 type CriterionRule = {
   pattern: RegExp;
@@ -6,6 +6,45 @@ type CriterionRule = {
   keywords: string[];
   evidencePatterns?: RegExp[];
 };
+
+type QuestionTypeConfig = {
+  type: QuestionType;
+  patterns: RegExp[];
+  criteria: string[];
+};
+
+const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
+  {
+    type: "ガクチカ系",
+    patterns: [/学生時代.*力|ガクチカ|主体的|頑張った|取り組んだ経験|力を入れた|最も.*経験/],
+    criteria: ["経験", "具体的内容", "工夫", "成果", "学び"]
+  },
+  {
+    type: "自己PR系",
+    patterns: [/自己PR|自己ＰＲ|強み|長所|アピール|あなたらしさ/],
+    criteria: ["強み", "具体エピソード", "行動", "成果", "再現性"]
+  },
+  {
+    type: "志望動機系",
+    patterns: [/志望|なぜ.*当社|応募理由|入社.*理由|当社.*理由/],
+    criteria: ["興味関心", "企業理解", "接点", "理由", "将来像"]
+  },
+  {
+    type: "改善提案系",
+    patterns: [/改善案|改善提案|サービス改善|企画提案|提案.*述べ|課題.*提案/],
+    criteria: ["課題発見", "根拠", "提案内容", "期待効果"]
+  },
+  {
+    type: "理由説明系",
+    patterns: [/好き.*理由|面白い.*理由|興味.*理由|印象に残った.*理由|作品.*理由|コンテンツ.*理由|技術.*理由/],
+    criteria: ["対象", "理由", "具体例", "感想・価値観"]
+  },
+  {
+    type: "将来像系",
+    patterns: [/将来|5年後|５年後|キャリアビジョン|やりたいこと|実現したい|目標/],
+    criteria: ["目標", "理由", "行動", "実現方法"]
+  }
+];
 
 const QUESTION_RULES: CriterionRule[] = [
   { pattern: /強み|自己PR|PR/g, label: "アピールしたい強み", keywords: ["強み", "得意", "持ち味", "私の"] },
@@ -66,7 +105,23 @@ const CRITERIA_ORDER = [
 const DEFAULT_KEYWORDS: Record<string, string[]> = {
   設問への直接回答: ["結論", "経験", "理由", "考え", "取り組"],
   具体性: ["具体", "例えば", "場面", "状況", "内容"],
-  行動と結果: ["行動", "実施", "取り組", "結果", "成果"]
+  行動と結果: ["行動", "実施", "取り組", "結果", "成果"],
+  強み: ["強み", "長所", "得意", "持ち味", "私らしさ"],
+  具体エピソード: ["経験", "エピソード", "具体", "場面", "活動", "取り組"],
+  行動: ["行動", "実行", "取り組", "提案", "働きかけ", "改善"],
+  再現性: ["活か", "再現", "貢献", "今後", "発揮", "御社", "当社"],
+  興味関心: ["興味", "関心", "惹か", "魅力", "面白"],
+  企業理解: ["理念", "事業", "サービス", "強み", "特徴", "業界", "御社", "当社"],
+  接点: ["経験", "価値観", "接点", "共通", "重な", "活か"],
+  課題発見: ["課題", "問題", "不便", "改善点", "現状", "不足"],
+  根拠: ["理由", "根拠", "データ", "調査", "分析", "事例", "なぜ"],
+  提案内容: ["提案", "企画", "改善案", "施策", "導入", "実施"],
+  期待効果: ["効果", "期待", "改善", "向上", "増加", "解決", "メリット"],
+  対象: ["作品", "コンテンツ", "技術", "映画", "アニメ", "ゲーム", "サービス", "番組", "最も", "好き"],
+  具体例: ["具体", "場面", "シーン", "例えば", "描写", "演出", "機能", "内容"],
+  "感想・価値観": ["感じ", "思い", "考え", "価値観", "面白", "魅力", "印象", "好き"],
+  目標: ["目標", "将来", "やりたい", "実現", "なりたい", "5年後", "５年後"],
+  実現方法: ["方法", "行動", "努力", "学び", "経験", "身につけ", "取り組"]
 };
 
 const FORBIDDEN_UNLESS_EXPLICIT: Record<string, RegExp> = {
@@ -84,6 +139,17 @@ export function clampScore(score: number) {
 
 function unique(items: string[]) {
   return [...new Set(items)].filter(Boolean);
+}
+
+function classifyQuestion(question: string): QuestionType {
+  const normalized = question.replace(/\s/g, "");
+  return QUESTION_TYPE_CONFIGS.find((config) => config.patterns.some((pattern) => pattern.test(normalized)))?.type ?? "一般設問";
+}
+
+function criteriaForQuestionType(type: QuestionType, question: string) {
+  const config = QUESTION_TYPE_CONFIGS.find((item) => item.type === type);
+  if (config) return config.criteria;
+  return extractCriteria(question, "question");
 }
 
 function filterQuestionOnlyCriteria(criteria: string[], question: string) {
@@ -176,10 +242,13 @@ function scoreCriterion(text: string, label: string) {
   const numericBonus = /\d|％|%|倍|人|名|円|位|件/.test(evidence || text) && label === "成果" ? 12 : 0;
   const reflectionBonus = label === "学び" && /学ん|気づ|大切|意識|理解|実感|得られ|身につ|視点|振り返/.test(text) ? 24 : 0;
   const actionBonus = ["工夫", "試行錯誤"].includes(label) && /改善|変更|分析|工夫|重ね|試し|振り返/.test(text) ? 14 : 0;
+  const reasonBonus = label === "理由" && /なぜなら|理由|からです|ためです|なので|だから|感じた|思った/.test(text) ? 22 : 0;
+  const opinionBonus = label === "感想・価値観" && /感じ|思い|考え|好き|面白|魅力|印象|価値観/.test(text) ? 22 : 0;
+  const targetBonus = label === "対象" && /作品|コンテンツ|映画|アニメ|ゲーム|技術|サービス|番組|ドラマ|漫画|小説/.test(text) ? 18 : 0;
   const hasExplicitResult = /結果|成果|向上|成功|評価|達成|増加|満足度|貢献|効果|実績/.test(text);
   const resultBonus = label === "成果" && hasExplicitResult ? 16 : 0;
   const baseScore = evidenceHits >= 3 ? 78 : evidenceHits === 2 ? 66 : evidenceHits === 1 ? 48 : hits > 0 ? 34 : 0;
-  const rawScore = clampScore(baseScore + numericBonus + reflectionBonus + actionBonus + resultBonus);
+  const rawScore = clampScore(baseScore + numericBonus + reflectionBonus + actionBonus + reasonBonus + opinionBonus + targetBonus + resultBonus);
   const score = label === "成果" && !hasExplicitResult ? Math.min(rawScore, 38) : rawScore;
 
   return { score, evidence };
@@ -272,15 +341,31 @@ function exampleForElement(element: string) {
   const examples: Record<string, string> = {
     経験: "「私は〇〇の活動で、△△に取り組みました。」",
     具体的内容: "「具体的には、〇〇という課題に対して△△を行いました。」",
+    強み: "「私の強みは、〇〇な状況でも△△できることです。」",
+    具体エピソード: "「この強みは、〇〇の経験で発揮しました。」",
+    行動: "「その際、私は〇〇を行い、△△に働きかけました。」",
+    再現性: "「この強みを活かし、入社後も〇〇に貢献したいです。」",
     工夫: "「その際、〇〇を改善するために△△を工夫しました。」",
     試行錯誤: "「うまくいかなかった点を振り返り、〇〇を見直しました。」",
     成果: "「その結果、〇〇が改善され、△△につながりました。」",
     学び: "「この経験から、〇〇の大切さを学びました。」",
+    興味関心: "「私は〇〇という点に強く興味を持っています。」",
+    企業理解: "「貴社の〇〇という事業・考え方に魅力を感じています。」",
+    接点: "「私の〇〇という経験と、貴社の△△に接点を感じました。」",
     理由: "「私がそう考える理由は、〇〇という経験があるからです。」",
+    課題発見: "「現状の課題は、〇〇が不足している点だと考えます。」",
+    根拠: "「そう考える根拠は、〇〇という状況があるためです。」",
+    提案内容: "「改善案として、〇〇を導入することを提案します。」",
+    期待効果: "「これにより、〇〇の改善が期待できます。」",
+    対象: "「私が最も面白いと感じた作品は、〇〇です。」",
+    具体例: "「特に〇〇の場面では、△△が印象的でした。」",
+    "感想・価値観": "「この作品の〇〇な点に、自分の△△という価値観が重なりました。」",
     主体性: "「私は自ら〇〇を提案し、△△に取り組みました。」",
     経験したいこと: "「インターンでは、〇〇の業務を経験したいです。」",
     身につけたいこと: "「その経験を通じて、〇〇を身につけたいです。」",
-    将来像: "「将来は、〇〇を通じて△△に貢献したいです。」"
+    将来像: "「将来は、〇〇を通じて△△に貢献したいです。」",
+    目標: "「将来は、〇〇を実現できる人材になりたいです。」",
+    実現方法: "「そのために、まず〇〇を経験し、△△を身につけたいです。」"
   };
 
   return examples[element] ?? `「${element}について、〇〇を具体的に追記しましょう。」`;
@@ -298,7 +383,8 @@ function buildAdditionExamples(coverage: CoverageItem[]) {
 }
 
 export function fallbackAnalyze(input: AnalyzeRequest): AnalyzeResult {
-  const questionCriteria = extractCriteria(input.question, "question");
+  const questionType = classifyQuestion(input.question);
+  const questionCriteria = criteriaForQuestionType(questionType, input.question);
   const philosophyCriteria = input.philosophy ? extractCriteria(input.philosophy, "philosophy") : [];
   const requiredCriteria = questionCriteria.length ? questionCriteria : DEFAULT_CRITERIA;
 
@@ -354,6 +440,7 @@ export function fallbackAnalyze(input: AnalyzeRequest): AnalyzeResult {
   const overallScore = clampScore((questionFitScore * 0.68) + ((philosophyFitScore ?? questionFitScore) * 0.2) + (wordCount.status === "条件内" || wordCount.status === "条件なし" ? 12 : 5));
 
   return {
+    questionType,
     overallScore,
     questionFitScore,
     philosophyFitScore,

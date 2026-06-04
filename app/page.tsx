@@ -214,6 +214,9 @@ export default function Home() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-slate-600">提出前チェック結果</p>
+                  <p className="mt-2 inline-flex rounded border border-white/70 bg-white px-3 py-1 text-sm font-semibold text-navy">
+                    設問タイプ: {result.questionType}
+                  </p>
                   <h2
                     className={`mt-1 text-4xl font-bold ${
                       missingItems.length ? "text-red-700" : unclearItems.length ? "text-amber-700" : "text-emerald-700"

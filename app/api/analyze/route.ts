@@ -8,6 +8,10 @@ const responseSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
+    questionType: {
+      type: "string",
+      enum: ["ガクチカ系", "自己PR系", "志望動機系", "改善提案系", "理由説明系", "将来像系", "一般設問"]
+    },
     overallScore: { type: "number" },
     questionFitScore: { type: "number" },
     philosophyFitScore: { type: "number" },
@@ -47,6 +51,7 @@ const responseSchema = {
   },
   required: [
     "overallScore",
+    "questionType",
     "questionFitScore",
     "philosophyFitScore",
     "questionCriteria",
@@ -77,8 +82,9 @@ function isAllowedCriterion(element: string, question: string) {
 
 function normalizeResult(result: AnalyzeResult, input: AnalyzeRequest): AnalyzeResult {
   const local = fallbackAnalyze(input);
+  const allowedElements = new Set(local.questionCriteria);
   const coverage = result.coverage
-    .filter((item) => isAllowedCriterion(item.element, input.question))
+    .filter((item) => isAllowedCriterion(item.element, input.question) && allowedElements.has(item.element))
     .map((item) => ({
       ...item,
       score: Math.max(0, Math.min(100, Math.round(item.score ?? (item.status === "対応済み" ? 80 : 20)))),
@@ -94,12 +100,13 @@ function normalizeResult(result: AnalyzeResult, input: AnalyzeRequest): AnalyzeR
 
   return {
     ...result,
+    questionType: local.questionType,
     overallScore: Math.max(0, Math.min(100, overallScore)),
     questionFitScore: Math.max(0, Math.min(100, questionFitScore)),
     philosophyFitScore: input.philosophy?.trim()
       ? Math.max(0, Math.min(100, Math.round(result.philosophyFitScore ?? 0)))
       : undefined,
-    questionCriteria: result.questionCriteria.filter((item) => isAllowedCriterion(item, input.question)),
+    questionCriteria: local.questionCriteria,
     coverage: normalizedCoverage,
     additionExamples: result.additionExamples?.length ? result.additionExamples : local.additionExamples,
     goodPoints: result.goodPoints?.length ? result.goodPoints : local.goodPoints,
@@ -141,8 +148,14 @@ export async function POST(request: Request) {
                 text: JSON.stringify({
                   task: "ES診断",
                   rules: [
-                    "設問から評価項目を抽出する",
-                    "抽象項目だけで終わらせず、経験系の設問では経験、具体的内容、工夫、成果、学びのようにユーザーが不足箇所を理解できる粒度に分解する",
+                    "最初に設問タイプを判定する。タイプは、ガクチカ系、自己PR系、志望動機系、改善提案系、理由説明系、将来像系、一般設問のいずれかにする",
+                    "設問タイプごとの評価項目で回答漏れを判定する",
+                    "ガクチカ系は、経験、具体的内容、工夫、成果、学びを見る",
+                    "自己PR系は、強み、具体エピソード、行動、成果、再現性を見る",
+                    "志望動機系は、興味関心、企業理解、接点、理由、将来像を見る",
+                    "改善提案系は、課題発見、根拠、提案内容、期待効果を見る",
+                    "理由説明系は、対象、理由、具体例、感想・価値観を見る。このタイプでは経験、成果、学びを必須にしない",
+                    "将来像系は、目標、理由、行動、実現方法を見る",
                     "設問文に存在しない観点を追加しない。将来像、志望動機、キャリア、入社後は設問にその語や同義表現が含まれる場合のみ使う",
                     "企業理念がある場合は理念から評価項目を抽出する",
                     "設問の複数要素それぞれにESが回答できているか判定する",
